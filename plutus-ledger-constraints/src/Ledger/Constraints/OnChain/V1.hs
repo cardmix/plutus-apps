@@ -107,12 +107,12 @@ checkTxConstraint ctx@ScriptContext{scriptContextTxInfo} = \case
     MustPayToPubKeyAddress (PaymentPubKeyHash pk) _ mdv vl ->
         let outs = V.txInfoOutputs scriptContextTxInfo
             hsh dv = V.findDatumHash dv scriptContextTxInfo
-            checkOutput dv TxOut{txOutDatumHash=Just svh} = hsh dv == Just svh
-            checkOutput _ _                               = False
+            checkOutput (dv, _isInline) TxOut{txOutDatumHash=Just svh} = hsh dv == Just svh
+            checkOutput _ _                                            = False
         in
         traceIfFalse "La" -- "MustPayToPubKey"
         $ vl `leq` V.valuePaidTo scriptContextTxInfo pk && maybe True (\dv -> any (checkOutput dv) outs) mdv
-    MustPayToOtherScript vlh _ dv vl ->
+    MustPayToOtherScript vlh _ dv _isInline vl ->
         let outs = V.txInfoOutputs scriptContextTxInfo
             hsh = V.findDatumHash dv scriptContextTxInfo
             addr = Address.scriptHashAddress vlh

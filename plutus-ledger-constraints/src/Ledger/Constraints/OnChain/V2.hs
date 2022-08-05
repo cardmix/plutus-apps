@@ -39,7 +39,7 @@ import Plutus.V2.Ledger.Tx (OutputDatum (NoOutputDatum, OutputDatum, OutputDatum
 import PlutusTx (ToData (toBuiltinData))
 import PlutusTx.AssocMap qualified as AMap
 import PlutusTx.Prelude (AdditiveSemigroup ((+)), Bool (False, True), Eq ((==)), Maybe (Just, Nothing),
-                         Ord ((<=), (>=)), all, any, elem, isJust, maybe, traceIfFalse, ($), (&&), (.), (>>))
+                         Ord ((<=), (>=)), all, any, elem, isJust, maybe, not, traceIfFalse, ($), (&&), (.), (>>))
 
 {-# INLINABLE checkScriptContext #-}
 -- | Does the 'ScriptContext' satisfy the constraints?
@@ -118,14 +118,13 @@ checkTxConstraint ctx@ScriptContext{scriptContextTxInfo} = \case
     MustPayToPubKeyAddress (PaymentPubKeyHash pk) _ mdv vl ->
         let outs = PV2.txInfoOutputs scriptContextTxInfo
             hsh dv = PV2.findDatumHash dv scriptContextTxInfo
-            checkOutput (Just dv) TxOut{txOutDatum=OutputDatumHash dh} = hsh dv == Just dh
-            checkOutput (Just dv) TxOut{txOutDatum=OutputDatum d}      = dv == d
-            -- return 'True' by default meaning we fail only when the provided datum is not found
-            checkOutput _ _                                            = True
+            checkOutput (dv, False) TxOut{txOutDatum=OutputDatumHash dh} = hsh dv == Just dh
+            checkOutput (dv, True)  TxOut{txOutDatum=OutputDatum d}      = dv == d
+            checkOutput _ _                                              = False
         in
         traceIfFalse "La" -- "MustPayToPubKey"
-        $ vl `leq` PV2.valuePaidTo scriptContextTxInfo pk && any (checkOutput mdv) outs
-    MustPayToOtherScript vlh _ dv vl ->
+        $ vl `leq` PV2.valuePaidTo scriptContextTxInfo pk && maybe True (\dv -> any (checkOutput dv) outs) mdv
+    MustPayToOtherScript vlh _ dv isInline vl ->
         let outs = PV2.txInfoOutputs scriptContextTxInfo
             hsh = PV2.findDatumHash dv scriptContextTxInfo
             addr = Address (ScriptCredential vlh) Nothing
@@ -135,12 +134,14 @@ checkTxConstraint ctx@ScriptContext{scriptContextTxInfo} = \case
                 && Value.noAdaValue txOutValue == Value.noAdaValue vl
                 && hsh == Just dh
                 && txOutAddress == addr
+                && not isInline
             checkOutput TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatum id} =
                    Ada.fromValue txOutValue >= Ada.fromValue vl
                 && Ada.fromValue txOutValue <= Ada.fromValue vl + Ledger.minAdaTxOut
                 && Value.noAdaValue txOutValue == Value.noAdaValue vl
                 && dv == id
                 && txOutAddress == addr
+                && isInline
             checkOutput _ = False
         in
         traceIfFalse "Lb" -- "MustPayToOtherScript"

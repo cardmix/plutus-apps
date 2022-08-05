@@ -689,15 +689,17 @@ processConstraint = \case
         mintRedeemers . at mpsHash .= Just red
     MustPayToPubKeyAddress pk skhM mdv vl -> do
         -- if datum is presented, add it to 'datumWitnesses'
-        forM_ mdv $ \dv -> do
+        -- TODO: support inline datums
+        forM_ mdv $ \(dv, _isInline) -> do
             unbalancedTx . tx . Tx.datumWitnesses . at (P.datumHash dv) .= Just dv
-        let hash = P.datumHash <$> mdv
+        let hash = P.datumHash . fst <$> mdv
         unbalancedTx . tx . Tx.outputs %= (Tx.TxOut{ txOutAddress=pubKeyHashAddress pk skhM
                                                    , txOutValue=vl
                                                    , txOutDatumHash=hash
                                                    } :)
         valueSpentOutputs <>= provided vl
-    MustPayToOtherScript vlh svhM dv vl -> do
+    MustPayToOtherScript vlh svhM dv _isInline vl -> do
+        -- TODO: support inline datums
         let addr = Address.scriptValidatorHashAddress vlh svhM
             theHash = P.datumHash dv
         unbalancedTx . tx . Tx.datumWitnesses . at theHash .= Just dv
