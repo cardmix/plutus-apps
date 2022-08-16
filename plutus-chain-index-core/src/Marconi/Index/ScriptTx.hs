@@ -74,9 +74,8 @@ toUpdate txs = ScriptTxUpdate txScripts'
   where
     txScripts' = map (\tx -> (TxCbor $ C.serialiseToCBOR tx, getTxScripts tx)) txs
 
-getTxScripts :: forall era . C.Tx era -> [ScriptAddress]
-getTxScripts tx = let
-    C.Tx (body :: C.TxBody era) _ws = tx
+getTxBodyScripts :: C.TxBody era -> [ScriptAddress]
+getTxBodyScripts body = let
     hashesMaybe :: [Maybe C.ScriptHash]
     hashesMaybe = case body of
       Shelley.ShelleyTxBody shelleyBasedEra _body scripts' _scriptData _auxData _validity ->
@@ -99,6 +98,9 @@ getTxScripts tx = let
           hash = C.hashScript $ mkCardanoApiScript sbs :: C.ScriptHash
         in Just hash
       _ -> Nothing
+
+getTxScripts :: forall era . C.Tx era -> [ScriptAddress]
+getTxScripts (C.Tx txBody _ws) = getTxBodyScripts txBody
 
 open :: FilePath -> Depth -> IO ScriptTxIndex
 open dbPath (Depth k) = do
