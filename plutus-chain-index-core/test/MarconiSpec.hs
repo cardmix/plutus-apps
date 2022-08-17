@@ -25,20 +25,39 @@ tests = testGroup "Marconi"
 
 testTxScripts :: Property
 testTxScripts = property $ do
+  let era = AlonzoEra
+
   -- Generate a random number of plutus scripts (see `genPlutusScript` from Gen.Cardano.Api.Typed)
   nScripts <- forAll $ Gen.integral (Range.linear 0 500)
   let plutusScriptVersion = PlutusScriptV1 :: PlutusScriptVersion PlutusScriptV1
+
   scripts0 :: [PlutusScript PlutusScriptV1] <- replicateM nScripts $
     forAll $ CGen.genPlutusScript plutusScriptVersion
 
   let scripts1 = map (PlutusScript plutusScriptVersion) scripts0 :: [Script PlutusScriptV1]
       scriptHashes =  map hashScript scripts1 :: [ScriptHash]
 
+  -- generate a transaction where outputs are the scripts
+  txBodyContent0 <- forAll $ genTxBodyContent era
+  newTxOuts <- do
+    txOuts :: [TxOut CtxTx AlonzoEra] <- replicateM nScripts $ forAll $ CGen.genTxOut era
+    let f (TxOut _addressInEra value datum) scriptHash = let
+          scriptCredential = PaymentCredentialByScript scriptHash
+          address = makeShelleyAddressInEra Mainnet scriptCredential NoStakeAddress :: AddressInEra AlonzoEra
+          in TxOut address value datum
+    return $ zipWith f txOuts scriptHashes
+
+  let txBodyContent1 = txBodyContent0 { txOuts = newTxOuts }
+  txBody <- case makeTransactionBody txBodyContent1 :: Either TxBodyError (TxBody AlonzoEra) of
+    Left err -> fail $ displayError err
+    Right r  -> return r
+  let txId = getTxId txBody :: TxId
+
   -- then generate an TxIns which spends funds from these scripts
   txIns :: TxIns build era <- do
     txIns0 :: [TxIn] <- replicateM nScripts $ forAll $ CGen.genTxIn
     let
-      spendScript scriptHash (TxIn _hashIWillDrop ix) = TxIn (TxId scriptHash) ix
+      spendScript _scriptHash (TxIn _hashIWillDrop ix) = TxIn (TxId undefined) ix
       --                                                           ^ This doesn't compile.
       --
       -- • Couldn't match type ‘ScriptHash’
@@ -52,8 +71,6 @@ testTxScripts = property $ do
 
       txIns1 = zipWith spendScript scriptHashes txIns0
     return $ map (, BuildTxWith (KeyWitness KeyWitnessForSpending)) txIns1
-
-  let era = AlonzoEra
 
   -- then generate a transaction with this TxIns (based on `genTxBodyContent`)
   txBodyContent :: TxBodyContent BuildTx AlonzoEra <- forAll $ genTxBodyContent2 era txIns
