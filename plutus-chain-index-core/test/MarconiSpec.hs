@@ -27,8 +27,8 @@ testTxScripts :: Property
 testTxScripts = property $ do
   let era = AlonzoEra
 
-  -- Generate a random number of plutus scripts (see `genPlutusScript` from Gen.Cardano.Api.Typed)
-  nScripts <- forAll $ Gen.integral (Range.linear 0 500)
+  -- "Generate a random number of plutus scripts (see `genPlutusScript` from Gen.Cardano.Api.Typed)"
+  nScripts <- forAll $ Gen.integral (Range.linear 5 500)
   let plutusScriptVersion = PlutusScriptV1 :: PlutusScriptVersion PlutusScriptV1
 
   scripts0 :: [PlutusScript PlutusScriptV1] <- replicateM nScripts $
@@ -37,47 +37,38 @@ testTxScripts = property $ do
   let scripts1 = map (PlutusScript plutusScriptVersion) scripts0 :: [Script PlutusScriptV1]
       scriptHashes =  map hashScript scripts1 :: [ScriptHash]
 
-  -- generate a transaction where outputs are the scripts
-  txBodyContent0 <- forAll $ genTxBodyContent era
+  -- create the 1st transaction where scripts are within the outputs:
+  tx1_bodyContent0 <- forAll $ genTxBodyContent era
+  -- create outputs where addressInEra is replaced with the created script address:
   newTxOuts <- do
     txOuts :: [TxOut CtxTx AlonzoEra] <- replicateM nScripts $ forAll $ CGen.genTxOut era
-    let f (TxOut _addressInEra value datum) scriptHash = let
+    let addScript (TxOut _addressInEra value datum) scriptHash = let
           scriptCredential = PaymentCredentialByScript scriptHash
-          address = makeShelleyAddressInEra Mainnet scriptCredential NoStakeAddress :: AddressInEra AlonzoEra
-          in TxOut address value datum
-    return $ zipWith f txOuts scriptHashes
-
-  let txBodyContent1 = txBodyContent0 { txOuts = newTxOuts }
-  txBody <- case makeTransactionBody txBodyContent1 :: Either TxBodyError (TxBody AlonzoEra) of
-    Left err -> fail $ displayError err
+          addressInEra = makeShelleyAddressInEra Mainnet scriptCredential NoStakeAddress :: AddressInEra AlonzoEra
+          in TxOut addressInEra value datum
+    -- replace scripts into outputs
+    return $ zipWith addScript txOuts scriptHashes
+  -- add the outputs to body content
+  let tx1_bodyContent1 = tx1_bodyContent0 { txOuts = newTxOuts }
+  tx1_body <- case makeTransactionBody tx1_bodyContent1 :: Either TxBodyError (TxBody AlonzoEra) of
+    Left err -> fail $ "First txBody: " <> displayError err
     Right r  -> return r
-  let txId = getTxId txBody :: TxId
 
-  -- then generate an TxIns which spends funds from these scripts
-  txIns :: TxIns build era <- do
-    txIns0 :: [TxIn] <- replicateM nScripts $ forAll $ CGen.genTxIn
-    let
-      spendScript _scriptHash (TxIn _hashIWillDrop ix) = TxIn (TxId undefined) ix
-      --                                                           ^ This doesn't compile.
-      --
-      -- • Couldn't match type ‘ScriptHash’
-      --                  with ‘cardano-crypto-class-2.0.0:Cardano.Crypto.Hash.Class.Hash
-      --                          cardano-crypto-class-2.0.0:Cardano.Crypto.Hash.Blake2b.Blake2b_256
-      --                          cardano-ledger-core-0.1.0.0:Cardano.Ledger.Hashes.EraIndependentTxBody’
-      --   Expected type: [cardano-crypto-class-2.0.0:Cardano.Crypto.Hash.Class.Hash
-      --                     cardano-crypto-class-2.0.0:Cardano.Crypto.Hash.Blake2b.Blake2b_256
-      --                     cardano-ledger-core-0.1.0.0:Cardano.Ledger.Hashes.EraIndependentTxBody]
-      --     Actual type: [ScriptHash]
+  let tx1_id = getTxId tx1_body :: TxId
 
-      txIns1 = zipWith spendScript scriptHashes txIns0
-    return $ map (, BuildTxWith (KeyWitness KeyWitnessForSpending)) txIns1
+  -- "then generate an TxIns which spends funds from these scripts"
+  let tx2_ins0 = map (\ix -> TxIn tx1_id $ TxIx $ fromIntegral ix) [0 .. (nScripts - 1)]
+      -- ^ create TxIns by referring to output indexes in
+      tx2_ins1 = map (, BuildTxWith (KeyWitness KeyWitnessForSpending)) tx2_ins0
 
-  -- then generate a transaction with this TxIns (based on `genTxBodyContent`)
-  txBodyContent :: TxBodyContent BuildTx AlonzoEra <- forAll $ genTxBodyContent2 era txIns
+  -- "then generate a transaction with this TxIns (based on `genTxBodyContent`)"
+  tx2_bodyContent :: TxBodyContent BuildTx AlonzoEra <- forAll $ genTxBodyContent2 era tx2_ins1
 
-  -- run your txScripts on this generated tx, and verify that the
-  case makeTransactionBody txBodyContent :: Either TxBodyError (TxBody AlonzoEra) of
-    Left err -> fail $ displayError err
+  -- "run your txScripts on this generated tx, and verify that the
+  -- initial generated plutus scripts are part of the function's
+  -- output."
+  case makeTransactionBody tx2_bodyContent :: Either TxBodyError (TxBody AlonzoEra) of
+    Left err -> fail $ "Second txBody: " <> displayError err
     Right txBody -> let
       hashesFound = map coerce $ ScriptTx.getTxBodyScripts txBody :: [ScriptHash]
       in scriptHashes === hashesFound
