@@ -491,14 +491,14 @@ toCardanoTxInWitness
         <*> pure zeroExecutionUnits
         )
 
-toCardanoMintWitness :: PV1.Redeemers -> Int -> P.MintingPolicy -> Either ToCardanoError (C.ScriptWitness C.WitCtxMint C.BabbageEra)
-toCardanoMintWitness redeemers idx (P.MintingPolicy script) = do
-    let redeemerPtr = PV1.RedeemerPtr PV1.Mint (fromIntegral idx)
+toCardanoMintWitness :: PV2.Redeemers -> Int -> PV2.MintingPolicy -> Either ToCardanoError (C.ScriptWitness C.WitCtxMint C.BabbageEra)
+toCardanoMintWitness redeemers idx (PV2.MintingPolicy script) = do
+    let redeemerPtr = PV2.RedeemerPtr PV2.Mint (fromIntegral idx)
     P.Redeemer redeemer <- maybe (Left MissingMintingPolicyRedeemer) Right (Map.lookup redeemerPtr redeemers)
-    C.PlutusScriptWitness C.PlutusScriptV1InBabbage C.PlutusScriptV1
-        <$> fmap C.PScript (toCardanoPlutusScript (C.AsPlutusScript C.AsPlutusScriptV1) script)
+    C.PlutusScriptWitness C.PlutusScriptV2InBabbage C.PlutusScriptV2
+        <$> fmap C.PScript (toCardanoPlutusScript (C.AsPlutusScript C.AsPlutusScriptV2) script)
         <*> pure C.NoScriptDatumForMint
-        <*> pure (C.fromPlutusData $ PV1.toData redeemer)
+        <*> pure (C.fromPlutusData $ PV2.toData redeemer)
         <*> pure zeroExecutionUnits
 
 -- TODO Handle reference script once 'P.TxOut' supports it (or when we use
@@ -669,7 +669,7 @@ fromCardanoValue (C.valueToList -> list) = foldMap toValue list
         toValue (C.AssetId policyId assetName, C.Quantity q)
             = Value.singleton (Value.mpsSymbol $ fromCardanoPolicyId policyId) (fromCardanoAssetName assetName) q
 
-toCardanoValue :: PV1.Value -> Either ToCardanoError C.Value
+toCardanoValue :: PV2.Value -> Either ToCardanoError C.Value
 toCardanoValue = fmap C.valueFromList . traverse fromValue . Value.flattenValue
     where
         fromValue (currencySymbol, tokenName, amount)
@@ -681,8 +681,8 @@ toCardanoValue = fmap C.valueFromList . traverse fromValue . Value.flattenValue
 fromCardanoPolicyId :: C.PolicyId -> P.MintingPolicyHash
 fromCardanoPolicyId (C.PolicyId scriptHash) = P.MintingPolicyHash $ PlutusTx.toBuiltin (C.serialiseToRawBytes scriptHash)
 
-toCardanoPolicyId :: P.MintingPolicyHash -> Either ToCardanoError C.PolicyId
-toCardanoPolicyId (P.MintingPolicyHash bs) = C.PolicyId <$> tag "toCardanoPolicyId" (tag (show (BS.length (PlutusTx.fromBuiltin bs)) <> " bytes") (deserialiseFromRawBytes C.AsScriptHash (PlutusTx.fromBuiltin bs)))
+toCardanoPolicyId :: PV2.MintingPolicyHash -> Either ToCardanoError C.PolicyId
+toCardanoPolicyId (PV2.MintingPolicyHash bs) = C.PolicyId <$> tag "toCardanoPolicyId" (tag (show (BS.length (PlutusTx.fromBuiltin bs)) <> " bytes") (deserialiseFromRawBytes C.AsScriptHash (PlutusTx.fromBuiltin bs)))
 
 fromCardanoAssetName :: C.AssetName -> Value.TokenName
 fromCardanoAssetName (C.AssetName bs) = Value.TokenName $ PlutusTx.toBuiltin bs
