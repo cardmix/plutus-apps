@@ -120,6 +120,7 @@ import Plutus.V1.Ledger.Credential qualified as Credential
 import Plutus.V1.Ledger.Tx qualified as PV1
 import Plutus.V1.Ledger.Value qualified as Value
 import Plutus.V2.Ledger.Api qualified as PV2
+import Plutus.V2.Ledger.Tx qualified as PV2
 import PlutusTx.Prelude qualified as PlutusTx
 import Prettyprinter (Pretty (pretty), colon, viaShow, (<+>))
 
@@ -647,9 +648,9 @@ fromCardanoMintValue C.TxMintNone              = mempty
 fromCardanoMintValue (C.TxMintValue _ value _) = fromCardanoValue value
 
 toCardanoMintValue
-    :: PV1.Redeemers
-    -> PV1.Value
-    -> Map.Map P.MintingPolicyHash P.MintingPolicy
+    :: PV2.Redeemers
+    -> PV2.Value
+    -> Map.Map PV2.MintingPolicyHash PV2.MintingPolicy
     -> Either ToCardanoError (C.TxMintValue C.BuildTx C.BabbageEra)
 toCardanoMintValue redeemers value mps =
     let indexedMps = Prelude.zip [0..] $ Map.toList mps

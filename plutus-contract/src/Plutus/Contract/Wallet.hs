@@ -62,6 +62,8 @@ import Plutus.Contract.Types (Contract)
 import Plutus.V1.Ledger.Api qualified as Plutus
 import Plutus.V1.Ledger.Scripts (MintingPolicyHash)
 import Plutus.V1.Ledger.Tx qualified as PV1
+import Plutus.V2.Ledger.Tx qualified as PV2
+import Plutus.V2.Ledger.Api qualified as PV2
 import PlutusTx qualified
 import Wallet.API qualified as WAPI
 import Wallet.Effects (WalletEffect, balanceTx, yieldUnbalancedTx)
@@ -292,8 +294,8 @@ mkMintingRedeemers P.Tx{P.txRedeemers, P.txMintScripts} =
     catMaybes <$> traverse extract (Map.toList txRedeemers)
  where
     indexedMintScriptHashes = Map.fromList $ zip [0..] $ Map.keys txMintScripts
-    extract (PV1.RedeemerPtr PV1.Mint idx, redeemer) = do
+    extract (PV2.RedeemerPtr PV2.Mint idx, redeemer) = do
         redeemerPolicyId <- maybe (Left CardanoAPI.MissingMintingPolicy) Right (Map.lookup idx indexedMintScriptHashes)
         pure $ Just MintingRedeemer{redeemer, redeemerPolicyId}
     -- Some other redeemer (like a spending redeemer) which is ignored
-    extract (PV1.RedeemerPtr _ _, _) = pure Nothing
+    extract (PV2.RedeemerPtr _ _, _) = pure Nothing
