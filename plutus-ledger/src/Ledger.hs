@@ -4,7 +4,8 @@ module Ledger (
     CurrencySymbol,
     TokenName,
     Value,
-    Ada
+    Ada,
+    defaultCostModelParams
     ) where
 
 import Ledger.Ada (Ada)
@@ -22,3 +23,5 @@ import Plutus.V1.Ledger.Contexts as Export
 import Plutus.V1.Ledger.Interval as Export
 import Plutus.V1.Ledger.Time as Export
 import Plutus.V1.Ledger.Value (AssetClass, CurrencySymbol, TokenName, Value)
+
+import PlutusCore.Evaluation.Machine.ExBudgetingDefaults
